@@ -1,0 +1,15 @@
+%% -*- mode: erlang -*-
+{application, chef_reindex,
+ [
+  {description, "Tooling to support reindexing chef organizations in solr"},
+  {vsn, "0.0.1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  %% uncomment if this is an active application
+  %% {mod, { chef_reindex_app, []}},
+  {env, []}
+ ]}.
+%% vim: set filetype=erlang tabstop=2

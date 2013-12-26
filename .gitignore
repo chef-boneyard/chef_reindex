@@ -1,0 +1,7 @@
+ebin/*
+*.beam
+deps/*
+rel/chef_reindex
+.concrete/DEV_MODE
+deps.plt
+.eunit
