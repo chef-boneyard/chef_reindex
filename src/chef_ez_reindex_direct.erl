@@ -10,6 +10,7 @@
          all_ids/2,
          name_id_dict/2,
          reindex/2,
+         reindex/3,
          reindex_from_file/2,
          reindex_from_list/2
          ]).
@@ -28,7 +29,13 @@
 reindex(OrgName, SolrUrl) ->
     DbCtx = make_context(),
     OrgId = chef_db:fetch_org_id(DbCtx, OrgName),
-    AllIndexes = fetch_org_indexes(DbCtx, OrgId),
+    AllIndexes = fetch_org_indexes(OrgId),
+    reindex(DbCtx, OrgId, OrgName, SolrUrl, AllIndexes).
+reindex(OrgName, OrgId, SolrUrl) ->
+    DbCtx = make_context(),
+    AllIndexes = fetch_org_indexes(OrgId),
+    reindex(DbCtx, OrgId, OrgName, SolrUrl, AllIndexes).
+reindex(DbCtx,OrgId,OrgName,SolrUrl,AllIndexes) ->
     [ begin
           NameIdDict = chef_db:create_name_id_dict(DbCtx, Idx, OrgId),
           AllIds = all_ids_from_name_id_dict(NameIdDict),
@@ -92,9 +99,9 @@ make_context() ->
                                     ]),
     chef_db:make_context(ReqId).
 
-fetch_org_indexes(Ctx, OrgId) ->
+fetch_org_indexes(OrgId) ->
     BuiltInIndexes = [node, role, environment, client],
-    DataBags = chef_db:list(#chef_data_bag{org_id = OrgId}, Ctx),
+    DataBags = chef_sql:fetch_object_names(#chef_data_bag{org_id = OrgId}),
     BuiltInIndexes ++ DataBags.
 
 chef_object_type(Index) when is_binary(Index) -> data_bag_item;
