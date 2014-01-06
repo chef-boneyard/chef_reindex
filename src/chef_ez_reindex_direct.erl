@@ -12,7 +12,9 @@
          reindex/2,
          reindex/3,
          reindex_from_file/2,
-         reindex_from_list/2
+         reindex_from_list/2,
+         fetch_org_indexes/1,
+         make_context/0
          ]).
 
 
