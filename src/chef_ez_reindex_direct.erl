@@ -43,7 +43,7 @@ reindex(DbCtx,OrgId,OrgName,SolrUrl,AllIndexes) ->
           AllIds = all_ids_from_name_id_dict(NameIdDict),
           error_logger:info_msg("reindex: start ~p ~p ~p ~p",
                                 [OrgName, OrgId, Idx, length(AllIds)]),
-          BatchSize = envy:get(chef_wm, bulk_fetch_batch_size, pos_integer),
+          BatchSize = envy:get(chef_db, bulk_fetch_batch_size, pos_integer),
           ObjType = chef_object_type(Idx),
           DoBatch = fun(Batch, _Acc) ->
                             Objects = chef_db:bulk_get(DbCtx, OrgName, ObjType, Batch),
