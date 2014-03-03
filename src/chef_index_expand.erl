@@ -282,21 +282,43 @@ make_doc_for_del(Command) ->
 make_doc_for_add(Command) ->
     Payload = ej:get({?K_PAYLOAD}, Command),
     [?DOC_S,
-     [ ?FIELD(Name, ej:get({Key}, Payload)) || {Key, Name} <- ?META_FIELDS ],
+     [ ?FIELD(Name, get_type_key(Key, Payload)) || {Key, Name} <- ?META_FIELDS ],
      maybe_data_bag_field(Payload),
      make_content(Payload),
      ?DOC_E].
 
+get_type_key(Key, Payload) ->
+    normalize_value(Key, ej:get({Key}, Payload)).
+normalize_value(<<"type">>, <<"environment">>) ->
+    <<"environment">>;
+normalize_value(<<"type">>, <<"node">>) ->
+    <<"node">>;
+normalize_value(<<"type">>, <<"client">>) ->
+    <<"client">>;
+normalize_value(<<"type">>, <<"role">>) ->
+    <<"role">>;
+normalize_value(<<"type">>, _) ->
+    <<"data_bag_item">>;
+normalize_value(_NotType, NotNormalized) ->
+    NotNormalized.
+
 %% @doc If we have a `data_bag_item' object, return a Solr field
 %% `data_bag', otherwise empty list.
 maybe_data_bag_field(Payload) ->
-    case ej:get({?K_TYPE}, Payload) of
-        ?K_DATA_BAG_ITEM ->
+    Result = case ej:get({?K_TYPE}, Payload) of
+        <<"environment">> ->
+                     [];
+        <<"node">> ->
+                     [];
+        <<"client">> ->
+                     [];
+        <<"role">> ->
+                     [];
+        _DataBagName ->
             ?FIELD(<<"data_bag">>,
-                   xml_text_escape(ej:get({?K_ITEM, ?K_DATA_BAG}, Payload)));
-        _ ->
-            []
-    end.
+                   xml_text_escape(ej:get({?K_ITEM, ?K_DATA_BAG}, Payload)))
+    end,
+    Result.
 
 %% @doc Extract the Chef object content, flatten/expand, and return an
 %% iolist of the `content' field.
