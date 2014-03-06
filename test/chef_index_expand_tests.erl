@@ -207,7 +207,7 @@ post_single_test_() ->
                                    ?assertEqual(Expect, Doc),
                                    {ok, "200", [], []}
                            end),
-               ?assertEqual(ok, chef_index_expand:post_single(Cmd))
+               ?assertEqual(ok, chef_index_expand:post_single(Cmd, role))
        end},
 
       {"happy path delete post_single",
@@ -224,7 +224,7 @@ post_single_test_() ->
                                    ?assertEqual(Expect, Doc),
                                    {ok, "200", [], []}
                            end),
-               ?assertEqual(ok, chef_index_expand:post_single(Cmd))
+               ?assertEqual(ok, chef_index_expand:post_single(Cmd, role))
        end},
 
       {"special handling for data bag items",
@@ -265,14 +265,14 @@ post_single_test_() ->
                                    ?assertEqual(Expect, Doc),
                                    {ok, "200", [], []}
                            end),
-               ?assertEqual(ok, chef_index_expand:post_single(Cmd))
+               ?assertEqual(ok, chef_index_expand:post_single(Cmd, <<"sport-balls">>))
        end},
 
       {"bogus action is skipped",
        fun() ->
                Cmd = chef_index_expand:make_command(bogus, role, <<"abc123">>,
                                              "chef_dbdb1212", MinItem),
-               ?assertEqual(ok, chef_index_expand:post_single(Cmd))
+               ?assertEqual(ok, chef_index_expand:post_single(Cmd, role))
        end},
 
       {"error from ibrowse",
@@ -283,7 +283,7 @@ post_single_test_() ->
                            fun(_Url, _Headers, post, _Doc) ->
                                    {ok, "500", [], <<"oh no">>}
                            end),
-               ?assertEqual({error, {"500", <<"oh no">>}}, chef_index_expand:post_single(Cmd))
+               ?assertEqual({error, {"500", <<"oh no">>}}, chef_index_expand:post_single(Cmd, role))
        end}
      ]}.
 
@@ -312,14 +312,14 @@ post_multi_test_() ->
                                    ?assertEqual(Expect, Doc),
                                    {ok, "200", [], []}
                            end),
-               ?assertEqual(ok, chef_index_expand:post_multi(Cmds))
+               ?assertEqual(ok, chef_index_expand:post_multi(Cmds, role))
        end},
 
       {"all empty post_multi",
        fun() ->
                AllBogus = [chef_index_expand:make_command(bogus, role, <<"a3">>, "db2", MinItem),
                            chef_index_expand:make_command(bogus, role, <<"a4">>, "db2", MinItem)],
-               ?assertEqual(ok, chef_index_expand:post_multi(AllBogus))
+               ?assertEqual(ok, chef_index_expand:post_multi(AllBogus, role))
        end}
 
       ]}.
