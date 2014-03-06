@@ -55,8 +55,8 @@
          delete_item/4,
          init_items/1,
          make_command/5,
-         post_multi/1,
-         post_single/1,
+         post_multi/2,
+         post_single/2,
          send_items/1
         ]).
 
@@ -93,8 +93,7 @@
 %% A mapping of the metadata command JSON keys to metadata field names
 %% for XML.
 -define(META_FIELDS, [{?K_ID, <<"X_CHEF_id_CHEF_X">>},
-                      {?K_DATABASE, <<"X_CHEF_database_CHEF_X">>},
-                      {?K_TYPE, <<"X_CHEF_type_CHEF_X">>}]).
+                      {?K_DATABASE, <<"X_CHEF_database_CHEF_X">>}]).
 
 -record(idx_exp_ctx, {
           to_add = [],
@@ -119,7 +118,7 @@ init_items(SolrUrl) ->
 add_item(#idx_exp_ctx{to_add = Added} = Ctx, Id, Ejson, Index, OrgId) ->
     %% TODO: we don't really need the intermediate "command" object.
     Command = make_command(add, Index, Id, OrgId, Ejson),
-    Doc = make_doc_for_add(Command),
+    Doc = make_doc_for_add(Command, chef_object_type(Index)),
     Ctx#idx_exp_ctx{to_add = [Doc | Added]}.
 
 %% @doc Add `Id' to the list of items to delete from solr.
@@ -130,6 +129,9 @@ delete_item(#idx_exp_ctx{to_del = Deleted} = Ctx, Id, Index, OrgId) ->
     Command = make_command(delete, Index, Id, OrgId, {[]}),
     Doc = make_doc_for_del(Command),
     Ctx#idx_exp_ctx{to_del = [Doc | Deleted]}.
+
+chef_object_type(Index) when is_binary(Index) -> {data_bag_item, Index};
+chef_object_type(Index) when is_atom(Index)   -> Index.
 
 %% @doc Send items accumulated in the index expand context to
 %% Solr. The URL used to talk to Solr is embedded in the context
@@ -200,9 +202,9 @@ normalize_db_name(OrgId) ->
 %% @doc Given a list of command EJSON terms, as returned by {@link
 %% make_command/4}, perform the appropriate flatten/expand operation
 %% and POST the result to Solr as a single update.
--spec post_multi(list()) -> ok | {error, {_, _}}.
-post_multi(Commands) ->
-    case handle_commands(Commands) of
+-spec post_multi(list(), atom() | binary()) -> ok | {error, {_, _}}.
+post_multi(Commands, Index) ->
+    case handle_commands(Commands, chef_object_type(Index)) of
         {[], []} ->
             ok;
         {ToAdd, ToDel} ->
@@ -221,19 +223,19 @@ value_or_empty([_|_], V) ->
 
 %% @doc Given a command EJSON term as returned by {@link
 %% make_command/4}, flatten/expand and POST to Solr.
--spec post_single(term()) -> ok | {error, {_, _}}.
-post_single(Command) ->
-    post_multi([Command]).
+-spec post_single(term(), atom() | binary()) -> ok | {error, {_, _}}.
+post_single(Command, Index) ->
+    post_multi([Command], Index).
 
 %% @doc Return tuple of `{ToAdd, ToDel}' where `ToAdd' and `ToDel' are
 %% iolists of XML data appropriate for including in an
 %% `<update>...</update>' doc and POSTing to Solr.
--spec handle_commands(list()) -> {list(), list()}.
-handle_commands(Commands) ->
+-spec handle_commands(list(), atom() | {data_bag_item, binary}) -> {list(), list()}.
+handle_commands(Commands, Index) ->
     lists:foldl(fun(C, {Adds, Deletes}) ->
                         case ej:get({?K_ACTION}, C) of
                             <<"add">> ->
-                                {[make_doc_for_add(C) | Adds], Deletes};
+                                {[make_doc_for_add(C, Index) | Adds], Deletes};
                             <<"delete">> ->
                                 {Adds, [make_doc_for_del(C) | Deletes]};
                             _ ->
@@ -279,55 +281,37 @@ make_doc_for_del(Command) ->
      ej:get({?K_ID}, Payload),
      <<"</id></delete>">>].
 
-make_doc_for_add(Command) ->
+make_doc_for_add(Command, ObjType) ->
     Payload = ej:get({?K_PAYLOAD}, Command),
+    TypeField = ?FIELD(<<"X_CHEF_type_CHEF_X">>, get_object_type(ObjType)),
+    MetaFieldsPL =  [ {Key, ej:get({Key0}, Payload)} || {Key0, Key} <- ?META_FIELDS ] ++ [{<<"X_CHEF_type_CHEF_X">>, get_object_type(ObjType)}],
+    MetaFields = [?FIELD(Name, ej:get({Key}, Payload)) || {Key, Name} <- ?META_FIELDS ] ++ [TypeField],
     [?DOC_S,
-     [ ?FIELD(Name, get_type_key(Key, Payload)) || {Key, Name} <- ?META_FIELDS ],
-     maybe_data_bag_field(Payload),
-     make_content(Payload),
+     MetaFields,
+     maybe_data_bag_field(ObjType),
+     make_content(Payload, MetaFieldsPL),
      ?DOC_E].
 
-get_type_key(Key, Payload) ->
-    normalize_value(Key, ej:get({Key}, Payload)).
-normalize_value(<<"type">>, <<"environment">>) ->
-    <<"environment">>;
-normalize_value(<<"type">>, <<"node">>) ->
-    <<"node">>;
-normalize_value(<<"type">>, <<"client">>) ->
-    <<"client">>;
-normalize_value(<<"type">>, <<"role">>) ->
-    <<"role">>;
-normalize_value(<<"type">>, _) ->
-    <<"data_bag_item">>;
-normalize_value(_NotType, NotNormalized) ->
-    NotNormalized.
+get_object_type({ObjectType, _}) ->
+    get_object_type(ObjectType);
+get_object_type(ObjectType) ->
+    list_to_binary(atom_to_list(ObjectType)).
 
 %% @doc If we have a `data_bag_item' object, return a Solr field
 %% `data_bag', otherwise empty list.
-maybe_data_bag_field(Payload) ->
-    Result = case ej:get({?K_TYPE}, Payload) of
-        <<"environment">> ->
-                     [];
-        <<"node">> ->
-                     [];
-        <<"client">> ->
-                     [];
-        <<"role">> ->
-                     [];
-        _DataBagName ->
-            ?FIELD(<<"data_bag">>,
-                   xml_text_escape(ej:get({?K_ITEM, ?K_DATA_BAG}, Payload)))
-    end,
-    Result.
+
+maybe_data_bag_field({_, DataBagName}) ->
+    ?FIELD(<<"data_bag">>, xml_text_escape(DataBagName));
+maybe_data_bag_field(_) ->
+    [].
 
 %% @doc Extract the Chef object content, flatten/expand, and return an
 %% iolist of the `content' field.
-make_content(Payload) ->
+make_content(Payload, MetaFieldsPL) ->
     %% The Ruby code in chef-expander adds the database name, id, and
     %% type as fields. So we do the same.
-    Meta = [ {Key, ej:get({Key0}, Payload)} || {Key0, Key} <- ?META_FIELDS ],
     {Item0} = ej:get({?K_ITEM}, Payload),
-    Item = {Meta ++ Item0},
+    Item = {MetaFieldsPL ++ Item0},
     ?FIELD(<<"content">>, flatten(Item)).
 
 %% @doc Main interface to flatten/expand for Chef object EJSON. Given
@@ -440,6 +424,8 @@ escape_char($") ->
 escape_char(C) ->
     C.
 
+to_bin({_, B}) ->
+    to_bin(B);
 to_bin(B) when is_binary(B) ->
     B;
 to_bin(S) when is_list(S) ->
