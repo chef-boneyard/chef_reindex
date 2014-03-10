@@ -26,7 +26,6 @@ ERLANG_DIALYZER_APPS = asn1 \
                        kernel \
                        mnesia \
                        public_key \
-                       runtime_tools \
                        ssl \
                        stdlib \
                        syntax_tools \
