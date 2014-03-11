@@ -23,6 +23,7 @@
 -export([start/2, stop/1]).
 
 start(_StartType, _StartArgs) ->
+    ok = chef_reindex_http:create_pool(),
     case chef_reindex_sup:start_link() of
         {ok, Pid} ->
             {ok, Pid};
