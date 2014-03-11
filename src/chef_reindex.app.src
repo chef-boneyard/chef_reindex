@@ -6,10 +6,11 @@
   {registered, []},
   {applications, [
                   kernel,
-                  stdlib
+                  stdlib,
+                  ibrowse
                  ]},
   %% uncomment if this is an active application
-  %% {mod, { chef_reindex_app, []}},
+  {mod, { chef_reindex_app, []}},
   {env, []}
  ]}.
 %% vim: set filetype=erlang tabstop=2
