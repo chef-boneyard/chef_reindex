@@ -137,7 +137,7 @@ send_to_solr(OrgId, Index, Objects, NameIdDict, SolrUrl) ->
       fun(SO, Ctx) ->
               {Id, IndexEjson} = ejson_for_indexing(Index, OrgId, SO, NameIdDict),
               chef_index_expand:add_item(Ctx, Id, IndexEjson, Index, OrgId)
-      end, chef_index_expand:init_items(SolrUrl), Objects),
+      end, chef_index_expand:init_items(), Objects),
     case chef_index_expand:send_items(SolrCtx) of
         ok ->
             ok;
