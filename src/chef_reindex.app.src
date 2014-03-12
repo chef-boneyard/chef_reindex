@@ -7,7 +7,8 @@
   {applications, [
                   kernel,
                   stdlib,
-                  ibrowse
+                  ibrowse,
+                  pooler
                  ]},
   %% uncomment if this is an active application
   {mod, { chef_reindex_app, []}},
