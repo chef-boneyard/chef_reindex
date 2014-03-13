@@ -178,7 +178,7 @@ post_single_test_() ->
                 {<<"key2">>, <<"value2">>}]},
     {setup,
      fun() ->
-             meck:new(ibrowse, [])
+             meck:new(chef_reindex_http, [])
      end,
      fun(_) ->
              meck:unload()
@@ -200,10 +200,8 @@ post_single_test_() ->
                           "X_CHEF_type_CHEF_X__=__role "
                           "key1__=__value1 key2__=__value2 </field>"
                           "</doc></add></update>">>,
-               meck:expect(ibrowse, send_req,
-                           fun(Url, Headers, post, Doc) ->
-                                   ?assertEqual("http://localhost:8983/update", Url),
-                                   ?assertEqual([{"Content-Type", "text/xml"}], Headers),
+               meck:expect(chef_reindex_http, request,
+                           fun("update", post, Doc) ->
                                    ?assertEqual(Expect, Doc),
                                    {ok, "200", [], []}
                            end),
@@ -217,10 +215,8 @@ post_single_test_() ->
 
                Expect = <<"<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                           "<update><delete><id>abc123</id></delete></update>">>,
-               meck:expect(ibrowse, send_req,
-                           fun(Url, Headers, post, Doc) ->
-                                   ?assertEqual("http://localhost:8983/update", Url),
-                                   ?assertEqual([{"Content-Type", "text/xml"}], Headers),
+               meck:expect(chef_reindex_http, request,
+                           fun("update", post, Doc) ->
                                    ?assertEqual(Expect, Doc),
                                    {ok, "200", [], []}
                            end),
@@ -258,10 +254,8 @@ post_single_test_() ->
                           "</doc>"
                           "</add>"
                           "</update>">>,
-               meck:expect(ibrowse, send_req,
-                           fun(Url, Headers, post, Doc) ->
-                                   ?assertEqual("http://localhost:8983/update", Url),
-                                   ?assertEqual([{"Content-Type", "text/xml"}], Headers),
+               meck:expect(chef_reindex_http, request,
+                           fun("update", post, Doc) ->
                                    ?assertEqual(Expect, Doc),
                                    {ok, "200", [], []}
                            end),
@@ -275,12 +269,12 @@ post_single_test_() ->
                ?assertEqual(ok, chef_index_expand:post_single(Cmd, role))
        end},
 
-      {"error from ibrowse",
+      {"error from chef_reindex_http",
        fun() ->
                Cmd = chef_index_expand:make_command(add, role, <<"abc123">>,
                                              "dbdb1212", MinItem),
-               meck:expect(ibrowse, send_req,
-                           fun(_Url, _Headers, post, _Doc) ->
+               meck:expect(chef_reindex_http, request,
+                           fun("update", post, _Doc) ->
                                    {ok, "500", [], <<"oh no">>}
                            end),
                ?assertEqual({error, {"500", <<"oh no">>}}, chef_index_expand:post_single(Cmd, role))
@@ -297,7 +291,7 @@ post_multi_test_() ->
             chef_index_expand:make_command(delete, role, <<"a5">>, "db3", {[]})],
     {setup,
      fun() ->
-             meck:new(ibrowse, [])
+             meck:new(chef_reindex_http, [])
      end,
      fun(_) ->
              meck:unload()
@@ -305,10 +299,8 @@ post_multi_test_() ->
      [{"happy path mix post_multi",
        fun() ->
                Expect = multi_update_xml_expect(),
-               meck:expect(ibrowse, send_req,
-                           fun(Url, Headers, post, Doc) ->
-                                   ?assertEqual("http://localhost:8983/update", Url),
-                                   ?assertEqual([{"Content-Type", "text/xml"}], Headers),
+               meck:expect(chef_reindex_http, request,
+                           fun("update", post, Doc) ->
                                    ?assertEqual(Expect, Doc),
                                    {ok, "200", [], []}
                            end),
@@ -332,7 +324,7 @@ context_based_api_test_() ->
             {delete, role, <<"a5">>, "db3", {[]}}],
     {setup,
      fun() ->
-             meck:new(ibrowse, [])
+             meck:new(chef_reindex_http, [])
      end,
      fun(_) ->
              meck:unload()
@@ -340,14 +332,12 @@ context_based_api_test_() ->
      [{"happy path add_item and delete_item",
        fun() ->
                Expect = multi_update_xml_expect(),
-               meck:expect(ibrowse, send_req,
-                           fun(Url, Headers, post, Doc) ->
-                                   ?assertEqual("http://localhost:8983/update", Url),
-                                   ?assertEqual([{"Content-Type", "text/xml"}], Headers),
+               meck:expect(chef_reindex_http, request,
+                           fun("update", post, Doc) ->
                                    ?assertEqual(Expect, Doc),
                                    {ok, "200", [], []}
                            end),
-               Ctx0 = chef_index_expand:init_items("http://localhost:8983/update"),
+               Ctx0 = chef_index_expand:init_items(),
                Ctx1 = lists:foldl(
                         fun({add, Index, Id, OrgId, Item}, Ctx) ->
                                 chef_index_expand:add_item(Ctx, Id, Item, Index, OrgId);
@@ -360,7 +350,7 @@ context_based_api_test_() ->
 
       {"all empty post_multi",
        fun() ->
-               Ctx0 = chef_index_expand:init_items("http://localhost:8983/update"),
+               Ctx0 = chef_index_expand:init_items(),
                ?assertEqual(ok, chef_index_expand:send_items(Ctx0))
        end}
 

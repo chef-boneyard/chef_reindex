@@ -53,7 +53,7 @@
 -export([
          add_item/5,
          delete_item/4,
-         init_items/1,
+         init_items/0,
          make_command/5,
          post_multi/2,
          post_single/2,
@@ -97,17 +97,16 @@
 
 -record(idx_exp_ctx, {
           to_add = [],
-          to_del = [],
-          solr_url
+          to_del = []
          }).
 
 -opaque index_expand_ctx() :: #idx_exp_ctx{}.
 -export_type([index_expand_ctx/0]).
 
 %% @doc Create a new index expand context.
--spec init_items(string()) -> index_expand_ctx().
-init_items(SolrUrl) ->
-    #idx_exp_ctx{solr_url = SolrUrl}.
+-spec init_items() -> index_expand_ctx().
+init_items() ->
+    #idx_exp_ctx{}.
 
 %% @doc Add an EJSON item to the provided index expand context. The
 %% backing implementation will flatten/expand `Ejson' either inline
@@ -137,19 +136,19 @@ chef_object_type(Index) when is_atom(Index)   -> Index.
 %% Solr. The URL used to talk to Solr is embedded in the context
 %% object and determined when `{@link init_items/1}' was called.
 -spec send_items(index_expand_ctx()) -> ok | {error, {_, _}}.
-send_items(#idx_exp_ctx{to_add = Added, to_del = Deleted, solr_url = Url}) ->
+send_items(#idx_exp_ctx{to_add = Added, to_del = Deleted}) ->
     case {Added, Deleted} of
         {[], []} ->
             ok;
         {ToAdd, ToDel} ->
-            error_logger:info_msg("chef_index_expand:send_items adds:~p dels:~p solr:~s~n",
-                                  [length(ToAdd), length(ToDel), Url]),
+            error_logger:info_msg("chef_index_expand:send_items adds:~p dels:~p~n",
+                                  [length(ToAdd), length(ToDel)]),
             Doc = [?XML_HEADER,
                    ?UPDATE_S,
                    ToDel,
                    value_or_empty(ToAdd, [?ADD_S, ToAdd, ?ADD_E]),
                    ?UPDATE_E],
-            post_to_solr(Doc, Url)
+            post_to_solr(Doc)
     end.
 
 %% --- start copy from chef_index (chef_index_queue) ---
@@ -243,21 +242,17 @@ handle_commands(Commands, Index) ->
                         end
                 end, {[], []}, Commands).
 
-post_to_solr(Doc) ->
-    post_to_solr(Doc, solr_url()).
-
 %% @doc Post iolist `Doc' to Solr's `/update' endpoint at
 %% `SolrUrl'.
 %%
 %% The atom `ok' is returned if Solr responds with a 2xx
 %% status code. Otherwise, an error tuple is returned.
--spec post_to_solr(iolist(), string()) -> ok | {error, {_, _}}.
-post_to_solr(Doc, SolrUrl) ->
-    Headers = [{"Content-Type", "text/xml"}],
+-spec post_to_solr(iolist()) -> ok | {error, {_, _}}.
+post_to_solr(Doc) ->
     %% Note: we should try to enhance ibrowse to allow sending an
     %% iolist to avoid having to do iolist_to_binary here.
     DocBin = iolist_to_binary(Doc),
-    {ok, Code, _Head, Body} = ibrowse:send_req(SolrUrl, Headers, post, DocBin),
+    {ok, Code, _Head, Body} = chef_reindex_http:request("update", post, DocBin),
     case Code of
         "2" ++ _Rest ->
             %% FIXME: add logging and timing
@@ -265,14 +260,6 @@ post_to_solr(Doc, SolrUrl) ->
         _ ->
             %% FIXME: add logging, timing
             {error, {Code, Body}}
-    end.
-
-solr_url() ->
-    case application:get_env(chef_index, solr_url) of
-        {ok, Url} ->
-            Url ++ "/update";
-        undefined ->
-            "http://localhost:8983/update"
     end.
 
 make_doc_for_del(Command) ->
