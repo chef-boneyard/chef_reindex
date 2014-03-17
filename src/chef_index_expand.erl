@@ -1,3 +1,4 @@
+
 %% -*- erlang-indent-level: 4;indent-tabs-mode: nil; fill-column: 92-*-
 %% ex: ts=4 sw=4 et
 %% Copyright 2014 Chef Software, Inc. All Rights Reserved.
@@ -51,6 +52,7 @@
 -module(chef_index_expand).
 
 -export([
+         start_link/0,
          add_item/5,
          delete_item/4,
          init_items/0,
@@ -59,6 +61,13 @@
          post_single/2,
          send_items/1
         ]).
+-behaviour(gen_server).
+
+%% gen_server callbacks
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2,
+         terminate/2, code_change/3]).
+
+-define(SERVER, ?MODULE).
 
 -ifdef(TEST).
 -compile([export_all]).
@@ -420,3 +429,18 @@ to_bin(S) when is_list(S) ->
 to_bin(A) when is_atom(A) ->
     atom_to_binary(A, utf8).
 
+start_link() ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+init([]) ->
+    {ok, #idx_exp_ctx{}}.
+handle_call(_Request, _From, State) ->
+    Reply = ok,
+    {reply, Reply, State}.
+handle_cast(_Msg, State) ->
+    {noreply, State}.
+handle_info(_Info, State) ->
+    {noreply, State}.
+terminate(_Reason, _State) ->
+    ok.
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
