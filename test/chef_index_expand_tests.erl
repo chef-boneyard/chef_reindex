@@ -324,10 +324,13 @@ context_based_api_test_() ->
             {delete, role, <<"a5">>, "db3", {[]}}],
     {setup,
      fun() ->
-             meck:new(chef_reindex_http, [])
+             meck:new(chef_reindex_http, []),
+             chef_index_expand:start_link()
+
      end,
      fun(_) ->
-             meck:unload()
+             meck:unload(),
+             chef_index_expand:stop()
      end,
      [{"happy path add_item and delete_item",
        fun() ->
@@ -337,21 +340,21 @@ context_based_api_test_() ->
                                    ?assertEqual(Expect, Doc),
                                    {ok, "200", [], []}
                            end),
-               Ctx0 = chef_index_expand:init_items(),
-               Ctx1 = lists:foldl(
-                        fun({add, Index, Id, OrgId, Item}, Ctx) ->
-                                chef_index_expand:add_item(Ctx, Id, Item, Index, OrgId);
-                           ({delete, Index, Id, OrgId, _Item}, Ctx) ->
-                                chef_index_expand:delete_item(Ctx, Id, Index, OrgId)
+               chef_index_expand:init_items(length(Cmds)),
+               lists:map(
+                        fun({add, Index, Id, OrgId, Item}) ->
+                                chef_index_expand:add_item(Id, Item, Index, OrgId);
+                           ({delete, Index, Id, OrgId, _Item}) ->
+                                chef_index_expand:delete_item(Id, Index, OrgId)
                            end,
-                        Ctx0, Cmds),
-               ?assertEqual(ok, chef_index_expand:send_items(Ctx1))
+                        Cmds),
+               ?assertEqual(ok, chef_index_expand:send_items())
        end},
 
       {"all empty post_multi",
        fun() ->
-               Ctx0 = chef_index_expand:init_items(),
-               ?assertEqual(ok, chef_index_expand:send_items(Ctx0))
+               chef_index_expand:init_items(0),
+               ?assertEqual(ok, chef_index_expand:send_items())
        end}
 
       ]}.

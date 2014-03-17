@@ -25,7 +25,7 @@
 %%
 %% <ol>
 %% <li>{@link init_items/1}</li>
-%% <li>{@link add_item/5}</li>
+%% <li>{@link add_item/4}</li>
 %% <li>{@link delete_item/4}</li>
 %% <li>{@link send_items/1}</li>
 %% </ol>
@@ -34,7 +34,7 @@
 %% init_items/1} to which you pass the URL for the Solr instance you
 %% want to work with.
 %%
-%% Next, use {@link add_item/5} to add/update items in the
+%% Next, use {@link add_item/4} to add/update items in the
 %% index. These items will go through the flatten/expand process. If
 %% you want to stage an item delete, use {@link delete_item/4}. Both
 %% of these functions take an item context object and return a
@@ -53,13 +53,14 @@
 
 -export([
          start_link/0,
-         add_item/5,
+         add_item/4,
          delete_item/4,
-         init_items/0,
+         init_items/1,
          make_command/5,
          post_multi/2,
          post_single/2,
-         send_items/1
+         send_items/0,
+         stop/0
         ]).
 -behaviour(gen_server).
 
@@ -105,6 +106,8 @@
                       {?K_DATABASE, <<"X_CHEF_database_CHEF_X">>}]).
 
 -record(idx_exp_ctx, {
+          count = 0,
+          current = 0,
           to_add = [],
           to_del = []
          }).
@@ -113,9 +116,12 @@
 -export_type([index_expand_ctx/0]).
 
 %% @doc Create a new index expand context.
--spec init_items() -> index_expand_ctx().
-init_items() ->
-    #idx_exp_ctx{}.
+-spec init_items(non_neg_integer()) -> index_expand_ctx().
+init_items(NumberItems) ->
+    gen_server:cast(?SERVER, {init_items,NumberItems}).
+
+add_item(Id, Ejson, Index, OrgId) ->
+    gen_server:cast(?SERVER, {add_item, Id, Ejson, Index, OrgId}).
 
 %% @doc Add an EJSON item to the provided index expand context. The
 %% backing implementation will flatten/expand `Ejson' either inline
@@ -129,6 +135,9 @@ add_item(#idx_exp_ctx{to_add = Added} = Ctx, Id, Ejson, Index, OrgId) ->
     Doc = make_doc_for_add(Command, chef_object_type(Index)),
     Ctx#idx_exp_ctx{to_add = [Doc | Added]}.
 
+delete_item(Id, Index, OrgId) ->
+    gen_server:cast(?SERVER, {delete_item, Id, Index, OrgId}).
+
 %% @doc Add `Id' to the list of items to delete from solr.
 -spec delete_item(index_expand_ctx(),
                   binary(),
@@ -140,6 +149,9 @@ delete_item(#idx_exp_ctx{to_del = Deleted} = Ctx, Id, Index, OrgId) ->
 
 chef_object_type(Index) when is_binary(Index) -> {data_bag_item, Index};
 chef_object_type(Index) when is_atom(Index)   -> Index.
+
+send_items() ->
+    gen_server:call(?SERVER, send_items).
 
 %% @doc Send items accumulated in the index expand context to
 %% Solr. The URL used to talk to Solr is embedded in the context
@@ -429,13 +441,28 @@ to_bin(S) when is_list(S) ->
 to_bin(A) when is_atom(A) ->
     atom_to_binary(A, utf8).
 
+stop() ->
+    gen_server:call(?SERVER, stop).
+
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 init([]) ->
     {ok, #idx_exp_ctx{}}.
+handle_call(send_items, _From, State) ->
+    Result = send_items(State),
+    {reply, Result, #idx_exp_ctx{}};
+handle_call(stop, _From, State) ->
+    {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
+
+handle_cast({add_item, Id, Ejson, Index, OrgId}, State) ->
+    {noreply, add_item(State, Id, Ejson, Index, OrgId)};
+handle_cast({delete_item, Id, Index, OrgId}, State) ->
+    {noreply, delete_item(State, Id, Index, OrgId)};
+handle_cast({init_items, Count}, State) ->
+    {noreply, State#idx_exp_ctx{count = Count}};
 handle_cast(_Msg, State) ->
     {noreply, State}.
 handle_info(_Info, State) ->
