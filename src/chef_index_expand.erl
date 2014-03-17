@@ -54,7 +54,7 @@
 -export([
          start_link/0,
          add_item/4,
-         delete_item/4,
+         delete_item/3,
          init_items/1,
          make_command/5,
          post_multi/2,
@@ -109,7 +109,8 @@
           count = 0,
           current = 0,
           to_add = [],
-          to_del = []
+          to_del = [],
+          send_requested = undefined
          }).
 
 -opaque index_expand_ctx() :: #idx_exp_ctx{}.
@@ -157,11 +158,16 @@ send_items() ->
 %% Solr. The URL used to talk to Solr is embedded in the context
 %% object and determined when `{@link init_items/1}' was called.
 -spec send_items(index_expand_ctx()) -> ok | {error, {_, _}}.
-send_items(#idx_exp_ctx{to_add = Added, to_del = Deleted}) ->
-    case {Added, Deleted} of
+send_items(#idx_exp_ctx{to_add = Added, to_del = Deleted,
+                        count = Count,
+                        current = Count,
+                       send_requested = Requestor}) when Requestor /= undefined ->
+    Result = case {Added, Deleted} of
         {[], []} ->
             ok;
-        {ToAdd, ToDel} ->
+        {UnsortedToAdd, UnsortedToDel} ->
+            ToAdd = sort(UnsortedToAdd),
+            ToDel = sort(UnsortedToDel),
             error_logger:info_msg("chef_index_expand:send_items adds:~p dels:~p~n",
                                   [length(ToAdd), length(ToDel)]),
             Doc = [?XML_HEADER,
@@ -170,7 +176,11 @@ send_items(#idx_exp_ctx{to_add = Added, to_del = Deleted}) ->
                    value_or_empty(ToAdd, [?ADD_S, ToAdd, ?ADD_E]),
                    ?UPDATE_E],
             post_to_solr(Doc)
-    end.
+             end,
+    gen_server:reply(Requestor, Result),
+    #idx_exp_ctx{};
+send_items(State) ->
+    State.
 
 %% --- start copy from chef_index (chef_index_queue) ---
 
@@ -448,26 +458,49 @@ start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 init([]) ->
     {ok, #idx_exp_ctx{}}.
-handle_call(send_items, _From, State) ->
-    Result = send_items(State),
-    {reply, Result, #idx_exp_ctx{}};
+
+handle_call(send_items, From, State) ->
+    NewState = State#idx_exp_ctx{send_requested = From},
+    Result = send_items(NewState),
+    {noreply, Result};
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
 
-handle_cast({add_item, Id, Ejson, Index, OrgId}, State) ->
-    {noreply, add_item(State, Id, Ejson, Index, OrgId)};
-handle_cast({delete_item, Id, Index, OrgId}, State) ->
-    {noreply, delete_item(State, Id, Index, OrgId)};
+handle_cast({add_created, OrderNum, Doc}, #idx_exp_ctx{to_add = Added} = State) ->
+    {noreply, send_items(State#idx_exp_ctx{to_add = [{OrderNum, Doc} | Added]})};
+handle_cast({add_item, Id, Ejson, Index, OrgId}, #idx_exp_ctx{current = Current} = State) ->
+    spawn_link(fun() ->
+                   Command = make_command(add, Index, Id, OrgId, Ejson),
+                   Doc = make_doc_for_add(Command, chef_object_type(Index)),
+                   gen_server:cast(?SERVER, {add_created, Current, Doc})
+                           end),
+    {noreply, State#idx_exp_ctx{current = Current + 1}};
+handle_cast({delete_created, OrderNum, Doc}, #idx_exp_ctx{to_del = Deleted} = State) ->
+    {noreply, send_items(State#idx_exp_ctx{to_del = [{OrderNum, Doc} | Deleted]})};
+handle_cast({delete_item, Id, Index, OrgId}, #idx_exp_ctx{current = Current} = State) ->
+    spawn_link(fun() ->
+                   Command = make_command(delete, Index, Id, OrgId, {[]}),
+                   Doc = make_doc_for_del(Command),
+                   gen_server:cast(?SERVER, {delete_created, Current, Doc})
+                           end),
+    {noreply, State#idx_exp_ctx{current = Current + 1}};
 handle_cast({init_items, Count}, State) ->
     {noreply, State#idx_exp_ctx{count = Count}};
 handle_cast(_Msg, State) ->
     {noreply, State}.
+
 handle_info(_Info, State) ->
     {noreply, State}.
+
 terminate(_Reason, _State) ->
     ok.
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+sort(List) ->
+    SortedList = lists:keysort(1, List),
+    {_OrderNums, Items} = lists:unzip(SortedList),
+    lists:reverse(Items).
