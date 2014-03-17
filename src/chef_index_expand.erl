@@ -60,7 +60,8 @@
          post_multi/2,
          post_single/2,
          send_items/0,
-         stop/0
+         stop/0,
+         gather/0
         ]).
 -behaviour(gen_server).
 
@@ -110,7 +111,8 @@
           current = 0,
           to_add = [],
           to_del = [],
-          send_requested = undefined
+          send_requested = undefined,
+          send_fun = fun chef_index_expand:post_to_solr/1
          }).
 
 -opaque index_expand_ctx() :: #idx_exp_ctx{}.
@@ -140,7 +142,8 @@ send_items() ->
 send_items(#idx_exp_ctx{to_add = Added, to_del = Deleted,
                         count = Count,
                         current = Count,
-                       send_requested = Requestor}) when Requestor /= undefined ->
+                       send_requested = Requestor,
+                       send_fun = SendFun}) when Requestor /= undefined ->
     Result = case {Added, Deleted} of
         {[], []} ->
             ok;
@@ -154,7 +157,7 @@ send_items(#idx_exp_ctx{to_add = Added, to_del = Deleted,
                    ToDel,
                    value_or_empty(ToAdd, [?ADD_S, ToAdd, ?ADD_E]),
                    ?UPDATE_E],
-            post_to_solr(Doc)
+            SendFun(Doc)
              end,
     gen_server:reply(Requestor, Result),
     #idx_exp_ctx{};
@@ -433,11 +436,18 @@ to_bin(A) when is_atom(A) ->
 stop() ->
     gen_server:call(?SERVER, stop).
 
+gather() ->
+    gen_server:call(?SERVER, gather).
+
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 init([]) ->
     {ok, #idx_exp_ctx{}}.
 
+handle_call(gather, From, State) ->
+    NewState = State#idx_exp_ctx{send_requested = From,
+                                send_fun = fun(_) -> no_op end},
+    {noreply, NewState};
 handle_call(send_items, From, State) ->
     NewState = State#idx_exp_ctx{send_requested = From},
     Result = send_items(NewState),
