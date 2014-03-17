@@ -124,29 +124,8 @@ init_items(NumberItems) ->
 add_item(Id, Ejson, Index, OrgId) ->
     gen_server:cast(?SERVER, {add_item, Id, Ejson, Index, OrgId}).
 
-%% @doc Add an EJSON item to the provided index expand context. The
-%% backing implementation will flatten/expand `Ejson' either inline
-%% (blocking) or async/parallel (in which case this function returns
-%% immediately).
--spec add_item(index_expand_ctx(), binary(), ej:json_object(),
-               binary() | atom(), binary()) -> index_expand_ctx().
-add_item(#idx_exp_ctx{to_add = Added} = Ctx, Id, Ejson, Index, OrgId) ->
-    %% TODO: we don't really need the intermediate "command" object.
-    Command = make_command(add, Index, Id, OrgId, Ejson),
-    Doc = make_doc_for_add(Command, chef_object_type(Index)),
-    Ctx#idx_exp_ctx{to_add = [Doc | Added]}.
-
 delete_item(Id, Index, OrgId) ->
     gen_server:cast(?SERVER, {delete_item, Id, Index, OrgId}).
-
-%% @doc Add `Id' to the list of items to delete from solr.
--spec delete_item(index_expand_ctx(),
-                  binary(),
-                  binary() | atom(), binary()) -> index_expand_ctx().
-delete_item(#idx_exp_ctx{to_del = Deleted} = Ctx, Id, Index, OrgId) ->
-    Command = make_command(delete, Index, Id, OrgId, {[]}),
-    Doc = make_doc_for_del(Command),
-    Ctx#idx_exp_ctx{to_del = [Doc | Deleted]}.
 
 chef_object_type(Index) when is_binary(Index) -> {data_bag_item, Index};
 chef_object_type(Index) when is_atom(Index)   -> Index.
