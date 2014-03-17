@@ -117,7 +117,7 @@
 -export_type([index_expand_ctx/0]).
 
 %% @doc Create a new index expand context.
--spec init_items(non_neg_integer()) -> index_expand_ctx().
+-spec init_items(non_neg_integer()) -> ok.
 init_items(NumberItems) ->
     gen_server:cast(?SERVER, {init_items,NumberItems}).
 
