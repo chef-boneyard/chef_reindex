@@ -133,12 +133,12 @@ send_to_solr(_, _, {error, _} = Error, _) ->
 send_to_solr(OrgId, Index, Objects, NameIdDict) ->
     %% NOTE: we could handle the mapping of Object to Id in the caller and pass in here a
     %% list of {Id, Object} tuples. This might be better?
-    SolrCtx = lists:foldl(
-      fun(SO, Ctx) ->
+    chef_index_expand:init_items(length(Objects)),
+    lists:map(fun(SO) ->
               {Id, IndexEjson} = ejson_for_indexing(Index, OrgId, SO, NameIdDict),
-              chef_index_expand:add_item(Ctx, Id, IndexEjson, Index, OrgId)
-      end, chef_index_expand:init_items(length(Objects)), Objects),
-    case chef_index_expand:send_items(SolrCtx) of
+              chef_index_expand:add_item(Id, IndexEjson, Index, OrgId)
+      end, Objects),
+    case chef_index_expand:send_items() of
         ok ->
             ok;
         {error, Why} ->
