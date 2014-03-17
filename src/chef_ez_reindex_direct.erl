@@ -27,17 +27,17 @@
 -export([
          all_ids/2,
          name_id_dict/2,
+         reindex/1,
          reindex/2,
-         reindex/3,
-         reindex_from_file/2,
-         reindex_from_list/2,
+         reindex_from_file/1,
+         reindex_from_list/1,
          fetch_org_indexes/1,
          make_context/0
          ]).
 
 
 %% @doc Reindex the specified `Index' in `OrgName'. This function avoids use of rabbitmq and
-%% POSTs updates directly to `SolrUrl'. Flatten/expand is handled by `chef_index_expand'
+%% POSTs updates directly to solr. Flatten/expand is handled by `chef_index_expand'
 %% which also takes care of POSTing the data to solr. When this function returns, all
 %% objects in the specified index will have been reindexed and received by solr.
 %%
@@ -46,16 +46,16 @@
 %% solr. Parallelization of flatten/expand is the responsibility of `chef_index_expand' and
 %% is not a concern of this code.
 -spec reindex('open-source-chef' | binary(), string()) -> [ok].
-reindex(OrgName, SolrUrl) ->
+reindex(OrgName) ->
     DbCtx = make_context(),
     OrgId = chef_db:fetch_org_id(DbCtx, OrgName),
     AllIndexes = fetch_org_indexes(OrgId),
-    reindex(DbCtx, OrgId, OrgName, SolrUrl, AllIndexes).
-reindex(OrgName, OrgId, SolrUrl) ->
+    reindex(DbCtx, OrgId, OrgName, AllIndexes).
+reindex(OrgName, OrgId) ->
     DbCtx = make_context(),
     AllIndexes = fetch_org_indexes(OrgId),
-    reindex(DbCtx, OrgId, OrgName, SolrUrl, AllIndexes).
-reindex(DbCtx,OrgId,OrgName,SolrUrl,AllIndexes) ->
+    reindex(DbCtx, OrgId, OrgName, AllIndexes).
+reindex(DbCtx,OrgId,OrgName, AllIndexes) ->
     [ begin
           NameIdDict = chef_db:create_name_id_dict(DbCtx, Idx, OrgId),
           AllIds = all_ids_from_name_id_dict(NameIdDict),
@@ -65,7 +65,7 @@ reindex(DbCtx,OrgId,OrgName,SolrUrl,AllIndexes) ->
           ObjType = chef_object_type(Idx),
           DoBatch = fun(Batch, _Acc) ->
                             Objects = chef_db:bulk_get(DbCtx, OrgName, ObjType, Batch),
-                            send_to_solr(OrgId, Idx, Objects, NameIdDict, SolrUrl)
+                            send_to_solr(OrgId, Idx, Objects, NameIdDict)
                     end,
           chefp:batch_fold(DoBatch, AllIds, ok, BatchSize),
           error_logger:info_msg("reindex: complete ~p ~p ~p",
@@ -73,14 +73,14 @@ reindex(DbCtx,OrgId,OrgName,SolrUrl,AllIndexes) ->
           ok
       end || Idx <- AllIndexes ].
 
-reindex_from_file(FileName, SolrUrl) ->
+reindex_from_file(FileName) ->
     {ok, OrgFile} = file:open(FileName, [read, raw, binary, {read_ahead, 1024}]),
     OrgNames = read_org_file(OrgFile, []),
-    reindex_from_list(OrgNames, SolrUrl).
+    reindex_from_list(OrgNames).
 
-reindex_from_list(OrgNames, SolrUrl) ->
+reindex_from_list(OrgNames) ->
     [ begin
-          reindex(OrgName, SolrUrl)
+          reindex(OrgName)
       end || OrgName  <- OrgNames ].
 
 read_org_file(OrgFile, OrgNames) ->
@@ -127,17 +127,17 @@ fetch_org_indexes(OrgId) ->
 chef_object_type(Index) when is_binary(Index) -> data_bag_item;
 chef_object_type(Index)                       -> Index.
 
-send_to_solr(_, _, {error, _} = Error, _, _) ->
+send_to_solr(_, _, {error, _} = Error, _) ->
     %% handle error from chef_db:bulk_get
     erlang:error(Error);
-send_to_solr(OrgId, Index, Objects, NameIdDict, SolrUrl) ->
+send_to_solr(OrgId, Index, Objects, NameIdDict) ->
     %% NOTE: we could handle the mapping of Object to Id in the caller and pass in here a
     %% list of {Id, Object} tuples. This might be better?
     SolrCtx = lists:foldl(
       fun(SO, Ctx) ->
               {Id, IndexEjson} = ejson_for_indexing(Index, OrgId, SO, NameIdDict),
               chef_index_expand:add_item(Ctx, Id, IndexEjson, Index, OrgId)
-      end, chef_index_expand:init_items(), Objects),
+      end, chef_index_expand:init_items(length(Objects)), Objects),
     case chef_index_expand:send_items(SolrCtx) of
         ok ->
             ok;
