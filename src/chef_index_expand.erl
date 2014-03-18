@@ -138,8 +138,8 @@ chef_object_type(Index) when is_atom(Index)   -> Index.
 %% object and determined when `{@link init_items/1}' was called.
 -spec send_items(pid() | index_expand_ctx()) -> ok | {error, {_, _}}.
 send_items(Pid) when is_pid(Pid)->
-    gen_server:call(Pid, send_items);
-send_items(#idx_exp_ctx{to_add = Added, to_del = Deleted,
+    % Adding a timeout of 30s as preprod is very, very slow
+    gen_server:call(Pid, send_items, 30000).
                         count = Count,
                         received = Count,
                        send_requested = Requestor,
