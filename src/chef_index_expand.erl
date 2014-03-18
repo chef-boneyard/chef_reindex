@@ -53,15 +53,14 @@
 
 -export([
          start_link/0,
-         add_item/4,
-         delete_item/3,
-         init_items/1,
+         add_item/5,
+         delete_item/4,
+         init_items/2,
          make_command/5,
          post_multi/2,
          post_single/2,
-         send_items/0,
-         stop/0,
-         gather/0
+         send_items/1,
+         stop/1,
         ]).
 -behaviour(gen_server).
 
@@ -119,26 +118,25 @@
 -export_type([index_expand_ctx/0]).
 
 %% @doc Create a new index expand context.
--spec init_items(non_neg_integer()) -> ok.
-init_items(NumberItems) ->
-    gen_server:cast(?SERVER, {init_items,NumberItems}).
+-spec init_items(pid(), non_neg_integer()) -> ok.
+init_items(Pid, NumberItems) ->
+    gen_server:cast(Pid, {init_items,NumberItems}).
 
-add_item(Id, Ejson, Index, OrgId) ->
-    gen_server:cast(?SERVER, {add_item, Id, Ejson, Index, OrgId}).
+add_item(Pid, Id, Ejson, Index, OrgId) ->
+    gen_server:cast(Pid, {add_item, Id, Ejson, Index, OrgId}).
 
-delete_item(Id, Index, OrgId) ->
-    gen_server:cast(?SERVER, {delete_item, Id, Index, OrgId}).
+delete_item(Pid, Id, Index, OrgId) ->
+    gen_server:cast(Pid, {delete_item, Id, Index, OrgId}).
 
 chef_object_type(Index) when is_binary(Index) -> {data_bag_item, Index};
 chef_object_type(Index) when is_atom(Index)   -> Index.
 
-send_items() ->
-    gen_server:call(?SERVER, send_items).
-
 %% @doc Send items accumulated in the index expand context to
 %% Solr. The URL used to talk to Solr is embedded in the context
 %% object and determined when `{@link init_items/1}' was called.
--spec send_items(index_expand_ctx()) -> ok | {error, {_, _}}.
+-spec send_items(pid() | index_expand_ctx()) -> ok | {error, {_, _}}.
+send_items(Pid) when is_pid(Pid)->
+    gen_server:call(Pid, send_items);
 send_items(#idx_exp_ctx{to_add = Added, to_del = Deleted,
                         count = Count,
                         current = Count,
@@ -433,14 +431,14 @@ to_bin(S) when is_list(S) ->
 to_bin(A) when is_atom(A) ->
     atom_to_binary(A, utf8).
 
-stop() ->
-    gen_server:call(?SERVER, stop).
+stop(Pid) ->
+    gen_server:call(Pid, stop).
 
 gather() ->
     gen_server:call(?SERVER, gather).
 
 start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+    gen_server:start_link(?MODULE, [], []).
 init([]) ->
     {ok, #idx_exp_ctx{}}.
 
@@ -461,19 +459,21 @@ handle_call(_Request, _From, State) ->
 handle_cast({add_created, OrderNum, Doc}, #idx_exp_ctx{to_add = Added} = State) ->
     {noreply, send_items(State#idx_exp_ctx{to_add = [{OrderNum, Doc} | Added]})};
 handle_cast({add_item, Id, Ejson, Index, OrgId}, #idx_exp_ctx{current = Current} = State) ->
+    ParentPid = self(),
     spawn_link(fun() ->
                    Command = make_command(add, Index, Id, OrgId, Ejson),
                    Doc = make_doc_for_add(Command, chef_object_type(Index)),
-                   gen_server:cast(?SERVER, {add_created, Current, Doc})
+                   gen_server:cast(ParentPid, {add_created, Current, Doc})
                            end),
     {noreply, State#idx_exp_ctx{current = Current + 1}};
 handle_cast({delete_created, OrderNum, Doc}, #idx_exp_ctx{to_del = Deleted} = State) ->
     {noreply, send_items(State#idx_exp_ctx{to_del = [{OrderNum, Doc} | Deleted]})};
 handle_cast({delete_item, Id, Index, OrgId}, #idx_exp_ctx{current = Current} = State) ->
+    ParentPid = self(),
     spawn_link(fun() ->
                    Command = make_command(delete, Index, Id, OrgId, {[]}),
                    Doc = make_doc_for_del(Command),
-                   gen_server:cast(?SERVER, {delete_created, Current, Doc})
+                   gen_server:cast(ParentPid, {delete_created, Current, Doc})
                            end),
     {noreply, State#idx_exp_ctx{current = Current + 1}};
 handle_cast({init_items, Count}, State) ->

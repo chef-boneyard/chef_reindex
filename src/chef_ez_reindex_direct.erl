@@ -133,17 +133,19 @@ send_to_solr(_, _, {error, _} = Error, _) ->
 send_to_solr(OrgId, Index, Objects, NameIdDict) ->
     %% NOTE: we could handle the mapping of Object to Id in the caller and pass in here a
     %% list of {Id, Object} tuples. This might be better?
-    chef_index_expand:init_items(length(Objects)),
+    {ok, Pid} = chef_index_expand:start_link(),
+    chef_index_expand:init_items(Pid, length(Objects)),
     lists:map(fun(SO) ->
               {Id, IndexEjson} = ejson_for_indexing(Index, OrgId, SO, NameIdDict),
-              chef_index_expand:add_item(Id, IndexEjson, Index, OrgId)
+              chef_index_expand:add_item(Pid, Id, IndexEjson, Index, OrgId)
       end, Objects),
-    case chef_index_expand:send_items() of
+    case chef_index_expand:send_items(Pid) of
         ok ->
             ok;
         {error, Why} ->
             erlang:error({error, {"chef_index_expand:send_items", Why}})
-    end.
+    end,
+    chef_index_expand:stop(Pid).
 
 ejson_for_indexing(Index, OrgId, SO, NameIdDict) ->
     PrelimEJson = decompress_and_decode(SO),
