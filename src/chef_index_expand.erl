@@ -61,6 +61,7 @@
          post_single/2,
          send_items/1,
          stop/1,
+         gather/1
         ]).
 -behaviour(gen_server).
 
@@ -434,8 +435,8 @@ to_bin(A) when is_atom(A) ->
 stop(Pid) ->
     gen_server:call(Pid, stop).
 
-gather() ->
-    gen_server:call(?SERVER, gather).
+gather(Pid) ->
+    gen_server:call(Pid, gather).
 
 start_link() ->
     gen_server:start_link(?MODULE, [], []).
