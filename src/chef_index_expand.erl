@@ -112,7 +112,7 @@
           to_add = [],
           to_del = [],
           send_requested = undefined,
-          send_fun = fun chef_index_expand:post_to_solr/1
+          send_fun = fun post_to_solr/1
          }).
 
 -opaque index_expand_ctx() :: #idx_exp_ctx{}.
