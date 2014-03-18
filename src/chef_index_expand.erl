@@ -140,6 +140,7 @@ chef_object_type(Index) when is_atom(Index)   -> Index.
 send_items(Pid) when is_pid(Pid)->
     % Adding a timeout of 30s as preprod is very, very slow
     gen_server:call(Pid, send_items, 30000).
+send_items_impl(#idx_exp_ctx{to_add = Added, to_del = Deleted,
                         count = Count,
                         received = Count,
                        send_requested = Requestor,
@@ -161,7 +162,7 @@ send_items(Pid) when is_pid(Pid)->
              end,
     gen_server:reply(Requestor, Result),
     #idx_exp_ctx{};
-send_items(State) ->
+send_items_impl(State) ->
     State.
 
 %% --- start copy from chef_index (chef_index_queue) ---
@@ -450,7 +451,7 @@ handle_call(gather, From, State) ->
     {noreply, NewState};
 handle_call(send_items, From, State) ->
     NewState = State#idx_exp_ctx{send_requested = From},
-    Result = send_items(NewState),
+    Result = send_items_impl(NewState),
     {noreply, Result};
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
@@ -459,7 +460,7 @@ handle_call(_Request, _From, State) ->
     {reply, Reply, State}.
 
 handle_cast({add_created, OrderNum, Doc}, #idx_exp_ctx{to_add = Added, received = Received} = State) ->
-    {noreply, send_items(State#idx_exp_ctx{to_add = [{OrderNum, Doc} | Added], received = (Received + 1)})};
+    {noreply, send_items_impl(State#idx_exp_ctx{to_add = [{OrderNum, Doc} | Added], received = (Received + 1)})};
 handle_cast({add_item, Id, Ejson, Index, OrgId}, #idx_exp_ctx{current = Current} = State) ->
     ParentPid = self(),
     spawn_link(fun() ->
@@ -469,7 +470,7 @@ handle_cast({add_item, Id, Ejson, Index, OrgId}, #idx_exp_ctx{current = Current}
                            end),
     {noreply, State#idx_exp_ctx{current = Current + 1}};
 handle_cast({delete_created, OrderNum, Doc}, #idx_exp_ctx{to_del = Deleted, received = Received} = State) ->
-    {noreply, send_items(State#idx_exp_ctx{to_del = [{OrderNum, Doc} | Deleted], received = Received + 1})};
+    {noreply, send_items_impl(State#idx_exp_ctx{to_del = [{OrderNum, Doc} | Deleted], received = Received + 1})};
 handle_cast({delete_item, Id, Index, OrgId}, #idx_exp_ctx{current = Current} = State) ->
     ParentPid = self(),
     spawn_link(fun() ->
