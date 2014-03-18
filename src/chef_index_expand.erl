@@ -437,6 +437,8 @@ to_bin(A) when is_atom(A) ->
 stop(Pid) ->
     gen_server:call(Pid, stop).
 
+%% Allows testing of batches without sending to solr.  Useful for getting timing
+%% info for batches.
 gather(Pid) ->
     gen_server:call(Pid, gather).
 
