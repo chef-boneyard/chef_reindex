@@ -109,6 +109,7 @@
 -record(idx_exp_ctx, {
           count = 0,
           current = 0,
+          received = 0,
           to_add = [],
           to_del = [],
           send_requested = undefined,
@@ -140,7 +141,7 @@ send_items(Pid) when is_pid(Pid)->
     gen_server:call(Pid, send_items);
 send_items(#idx_exp_ctx{to_add = Added, to_del = Deleted,
                         count = Count,
-                        current = Count,
+                        received = Count,
                        send_requested = Requestor,
                        send_fun = SendFun}) when Requestor /= undefined ->
     Result = case {Added, Deleted} of
@@ -457,8 +458,8 @@ handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
 
-handle_cast({add_created, OrderNum, Doc}, #idx_exp_ctx{to_add = Added} = State) ->
-    {noreply, send_items(State#idx_exp_ctx{to_add = [{OrderNum, Doc} | Added]})};
+handle_cast({add_created, OrderNum, Doc}, #idx_exp_ctx{to_add = Added, received = Received} = State) ->
+    {noreply, send_items(State#idx_exp_ctx{to_add = [{OrderNum, Doc} | Added], received = (Received + 1)})};
 handle_cast({add_item, Id, Ejson, Index, OrgId}, #idx_exp_ctx{current = Current} = State) ->
     ParentPid = self(),
     spawn_link(fun() ->
@@ -467,8 +468,8 @@ handle_cast({add_item, Id, Ejson, Index, OrgId}, #idx_exp_ctx{current = Current}
                    gen_server:cast(ParentPid, {add_created, Current, Doc})
                            end),
     {noreply, State#idx_exp_ctx{current = Current + 1}};
-handle_cast({delete_created, OrderNum, Doc}, #idx_exp_ctx{to_del = Deleted} = State) ->
-    {noreply, send_items(State#idx_exp_ctx{to_del = [{OrderNum, Doc} | Deleted]})};
+handle_cast({delete_created, OrderNum, Doc}, #idx_exp_ctx{to_del = Deleted, received = Received} = State) ->
+    {noreply, send_items(State#idx_exp_ctx{to_del = [{OrderNum, Doc} | Deleted], received = Received + 1})};
 handle_cast({delete_item, Id, Index, OrgId}, #idx_exp_ctx{current = Current} = State) ->
     ParentPid = self(),
     spawn_link(fun() ->
