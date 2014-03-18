@@ -322,39 +322,46 @@ context_based_api_test_() ->
     Cmds = [{add, role, <<"a1">>, "db1", MinItem},
             {add, role, <<"a2">>, "db2", MinItem},
             {delete, role, <<"a5">>, "db3", {[]}}],
-    {setup,
-     fun() ->
-             meck:new(chef_reindex_http, [])
-     end,
-     fun(_) ->
-             meck:unload()
-     end,
-     [{"happy path add_item and delete_item",
+    
+      {foreach,
        fun() ->
-               Expect = multi_update_xml_expect(),
-               meck:expect(chef_reindex_http, request,
-                           fun("update", post, Doc) ->
-                                   ?assertEqual(Expect, Doc),
-                                   {ok, "200", [], []}
-                           end),
-               Ctx0 = chef_index_expand:init_items(),
-               Ctx1 = lists:foldl(
-                        fun({add, Index, Id, OrgId, Item}, Ctx) ->
-                                chef_index_expand:add_item(Ctx, Id, Item, Index, OrgId);
-                           ({delete, Index, Id, OrgId, _Item}, Ctx) ->
-                                chef_index_expand:delete_item(Ctx, Id, Index, OrgId)
-                           end,
-                        Ctx0, Cmds),
-               ?assertEqual(ok, chef_index_expand:send_items(Ctx1))
-       end},
+               meck:new(chef_reindex_http, []),
+               {ok, Pid} = chef_index_expand:start_link(),
+               Pid
 
-      {"all empty post_multi",
-       fun() ->
-               Ctx0 = chef_index_expand:init_items(),
-               ?assertEqual(ok, chef_index_expand:send_items(Ctx0))
-       end}
+       end,
+       fun(Pid) ->
+               meck:unload(),
+               chef_index_expand:stop(Pid)
+       end,
+       [
+        fun(Pid) ->
+                [{"happy path add_item and delete_item",
+                  fun() ->
+                          Expect = multi_update_xml_expect(),
+                          meck:expect(chef_reindex_http, request,
+                                      fun("update", post, Doc) ->
+                                              ?assertEqual(Expect, Doc),
+                                              {ok, "200", [], []}
+                                      end),
+                          chef_index_expand:init_items(Pid, length(Cmds)),
+                          lists:map(
+                            fun({add, Index, Id, OrgId, Item}) ->
+                                    chef_index_expand:add_item(Pid, Id, Item, Index, OrgId);
+                               ({delete, Index, Id, OrgId, _Item}) ->
+                                    chef_index_expand:delete_item(Pid, Id, Index, OrgId)
+                            end,
+                            Cmds),
+                          ?assertEqual(ok, chef_index_expand:send_items(Pid))
 
-      ]}.
+                  end},
+                 {"all empty post_multi",
+                  fun() ->
+                          chef_index_expand:init_items(Pid, 0),
+                          ?assertEqual(ok, chef_index_expand:send_items(Pid))
+                  end}]
+        end
+       ]}.
 
 multi_update_xml_expect() ->
     %% See http://wiki.apache.org/solr/UpdateXmlMessages
