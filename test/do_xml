@@ -25,7 +25,7 @@ process_file(File) ->
     {ok, Bin} = file:read_file(File),
     Node = jiffy:decode(Bin),
     Cmd = chef_index_expand:make_command(add, node, <<"beef123">>, <<"db123">>, Node),
-    {ToAdd,ToDel} = chef_index_expand:handle_commands([Cmd]),
+    {ToAdd,ToDel} = chef_index_expand:handle_commands([Cmd], node),
      Doc = [?XML_HEADER,
                    ?UPDATE_S,
                    ToDel,
