@@ -411,6 +411,8 @@ xml_text_escape(BinStr) ->
 
 xml_text_escape1(BinStr) when is_binary(BinStr) ->
     fast_xs:escape(BinStr);
+%    [ escape_char(C) || <<C>> <= BinStr ];
+
 xml_text_escape1(BinList) when is_list(BinList) ->
     [ xml_text_escape1(B) || B <- BinList ].
 
