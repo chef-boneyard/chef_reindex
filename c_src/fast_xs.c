@@ -77,7 +77,6 @@ static size_t do_escape(unsigned char *buf, int n)
 	memcpy(buf, x, sizeof(x) - 1); \
 	return (sizeof(x) - 1); \
 } while (0)
-
 	/* handle ASCII first */
 	if (likely(n < 128)) {
 		if (likely(n >= 0x20 || n == '\t' || n == '\n' || n == '\r')) {
@@ -123,7 +122,7 @@ static size_t do_escape(unsigned char *buf, int n)
  * escapes strings for XML
  * The double-quote (") character is translated to "&quot;"
  */
-unsigned char * fast_xs(unsigned char * string, size_t len)
+unsigned char * fast_xs(unsigned char * string, size_t len, size_t * result_size)
 {
 	long i;
 	size_t s_len = len;
@@ -131,8 +130,9 @@ unsigned char * fast_xs(unsigned char * string, size_t len)
 	unsigned char * rv;
         unsigned char * c;
 
-	for (i = len; i>0; --i) {
+	for (i = len-1; i>=0; --i) {
 		int n = string[i];
+                //                printf("string[i] %c\n", string[i]);
 		if (likely(n < 128)) {
 			if (unlikely(n == '"'))
 				s_len += (sizeof("&quot;") - 2);
@@ -148,10 +148,12 @@ unsigned char * fast_xs(unsigned char * string, size_t len)
 		if (VALID_VALUE(n))
 			s_len += bytes_for(n) - 1;
 	}
+//        printf("s_len is %lu\n", s_len);
 	rv = enif_alloc(s_len);
-
+        *result_size = s_len;
         c = rv;
-	for (tmp = string, i = len;i > 0; --i,tmp++){
+	for (tmp = string, i = len-1;i >= 0; --i,tmp++){
+            //          printf("*tmp %c\n", *tmp);
 	    c += do_escape(c, *tmp);
         }
 	return rv;
@@ -162,17 +164,18 @@ static ERL_NIF_TERM escape_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
     unsigned char * binary_string, * result_binary_string, * dest_binary_string;
     ErlNifBinary input_binary_ro;
     ERL_NIF_TERM retval;
-    size_t result_size;
+    size_t result_size = 0;
 
     if(!enif_inspect_binary(env, argv[0], &input_binary_ro)){
         return enif_make_badarg(env);
     }
     binary_string = enif_alloc(input_binary_ro.size);
+//    printf("input_binary_ro.size %lu\n", input_binary_ro.size);
     memcpy(binary_string, input_binary_ro.data, input_binary_ro.size);
     
 
-    result_binary_string = fast_xs(binary_string, input_binary_ro.size);
-    result_size = strlen((char*)result_binary_string);
+    result_binary_string = fast_xs(binary_string, input_binary_ro.size, &result_size);
+//    printf("result_size %lu\n", result_size);
     dest_binary_string = enif_make_new_binary(env,result_size, &retval);
     memcpy(dest_binary_string, result_binary_string, result_size);
 
