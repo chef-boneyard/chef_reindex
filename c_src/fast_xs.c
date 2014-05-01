@@ -121,6 +121,9 @@ static size_t do_escape(unsigned char *buf, int n)
 /*
  * escapes strings for XML
  * The double-quote (") character is translated to "&quot;"
+ * string is the binary string from erlang, len is the initial length
+ * result size is an out param that will get assigned the resulting
+ * length of the string after it is escaped
  */
 unsigned char * fast_xs(unsigned char * string, size_t len, size_t * result_size)
 {
@@ -132,7 +135,6 @@ unsigned char * fast_xs(unsigned char * string, size_t len, size_t * result_size
 
 	for (i = len-1; i>=0; --i) {
 		int n = string[i];
-                //                printf("string[i] %c\n", string[i]);
 		if (likely(n < 128)) {
 			if (unlikely(n == '"'))
 				s_len += (sizeof("&quot;") - 2);
@@ -148,12 +150,10 @@ unsigned char * fast_xs(unsigned char * string, size_t len, size_t * result_size
 		if (VALID_VALUE(n))
 			s_len += bytes_for(n) - 1;
 	}
-//        printf("s_len is %lu\n", s_len);
 	rv = enif_alloc(s_len);
         *result_size = s_len;
         c = rv;
 	for (tmp = string, i = len-1;i >= 0; --i,tmp++){
-            //          printf("*tmp %c\n", *tmp);
 	    c += do_escape(c, *tmp);
         }
 	return rv;
@@ -161,7 +161,7 @@ unsigned char * fast_xs(unsigned char * string, size_t len, size_t * result_size
 
 static ERL_NIF_TERM escape_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    unsigned char * binary_string, * result_binary_string, * dest_binary_string;
+    unsigned char * result_binary_string, * dest_binary_data;
     ErlNifBinary input_binary_ro;
     ERL_NIF_TERM retval;
     size_t result_size = 0;
@@ -169,36 +169,18 @@ static ERL_NIF_TERM escape_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
     if(!enif_inspect_binary(env, argv[0], &input_binary_ro)){
         return enif_make_badarg(env);
     }
-    binary_string = enif_alloc(input_binary_ro.size);
-//    printf("input_binary_ro.size %lu\n", input_binary_ro.size);
-    memcpy(binary_string, input_binary_ro.data, input_binary_ro.size);
-    
-
-    result_binary_string = fast_xs(binary_string, input_binary_ro.size, &result_size);
-//    printf("result_size %lu\n", result_size);
-    dest_binary_string = enif_make_new_binary(env,result_size, &retval);
-    memcpy(dest_binary_string, result_binary_string, result_size);
+    result_binary_string = fast_xs(input_binary_ro.data, input_binary_ro.size, &result_size);
+    //enif_make_new_binary uses retval as an out parameter and returns
+    //the data ptr from the resulting term.  We then copy into that
+    //buffer the result of the expansion which is of size result_size
+    dest_binary_data = enif_make_new_binary(env,result_size, &retval);
+    memcpy(dest_binary_data, result_binary_string, result_size);
 
     enif_free(result_binary_string);
-    enif_free(binary_string);
 
     return retval;
 }
 
-
-
-//void Init_fast_xs(void)
-//{
-//	assert(cp_1252[159 - 128] == 376); /* just in case I skipped a line */
-//
-//	unpack_id = rb_intern("unpack");
-//	U_fmt = rb_str_new("U*", 2);
-//	C_fmt = rb_str_new("C*", 2);
-//	rb_global_variable(&U_fmt);
-//	rb_global_variable(&C_fmt);
-//
-//	rb_define_method(rb_cString, "fast_xs", fast_xs, 0);
-//}
 
 static ErlNifFunc nif_funcs[] = {
     {"escape", 1, escape_nif}
