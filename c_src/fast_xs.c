@@ -186,5 +186,25 @@ static ErlNifFunc nif_funcs[] = {
     {"escape", 1, escape_nif}
 };
 
+static int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info);
+static int reload(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info);
+static int upgrade(ErlNifEnv* env, void** priv_data, void** old_priv_data, ERL_NIF_TERM load_info);
+static void unload(ErlNifEnv* env, void* priv_data);
 
-ERL_NIF_INIT(fast_xs, nif_funcs, NULL, NULL, NULL, NULL)
+static int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
+{
+    return 0;
+}
+static int reload(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
+{
+    return 0;
+}
+static int upgrade(ErlNifEnv* env, void** priv_data, void** old_priv_data, ERL_NIF_TERM load_info)
+{
+    return 0;
+}
+static void unload(ErlNifEnv* env, void* priv_data)
+{
+}
+
+ERL_NIF_INIT(fast_xs, nif_funcs, load, reload, upgrade, unload)
