@@ -1,6 +1,8 @@
 # chef_reindex #
 
-Tooling to support reindexing chef organizations in solr
+Tooling to support reindexing chef organizations in solr.  The files
+in c_src are ported from the ruby gem fast-xs.  The MIT license is
+preserved for those files.
 
 ## Author(s) ##
 
@@ -8,4 +10,4 @@ Tooling to support reindexing chef organizations in solr
 
 ## Copyright ##
 
-Copyright (c) 2013 Opscode, Inc.  All rights reserved.
+Copyright (c) 2014 Opscode, Inc.  All rights reserved.

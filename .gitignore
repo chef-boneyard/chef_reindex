@@ -6,3 +6,5 @@ rel/chef_reindex
 deps.plt
 .eunit
 *.out
+*.o
+*.so

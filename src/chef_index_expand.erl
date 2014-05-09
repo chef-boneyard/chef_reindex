@@ -410,20 +410,10 @@ xml_text_escape(BinStr) ->
     iolist_to_binary(xml_text_escape1(BinStr)).
 
 xml_text_escape1(BinStr) when is_binary(BinStr) ->
-    [ escape_char(C) || <<C>> <= BinStr ];
+    fast_xs:escape(BinStr);
+
 xml_text_escape1(BinList) when is_list(BinList) ->
     [ xml_text_escape1(B) || B <- BinList ].
-
-escape_char($<) ->
-    "&lt;";
-escape_char($&) ->
-    "&amp;";
-escape_char($>) ->
-    "&gt;";
-escape_char($") ->
-    "&quot;";
-escape_char(C) ->
-    C.
 
 to_bin({_, B}) ->
     to_bin(B);
