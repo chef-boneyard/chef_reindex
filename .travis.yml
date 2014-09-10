@@ -1,0 +1,16 @@
+language: erlang
+
+otp_release:
+  - R15B03
+
+branches:
+  only:
+    - master
+
+script: make
+
+notifications:
+  hipchat:
+    rooms:
+      # Build Statuses
+      - secure: LocdIBNmd70s2Pjuz6ln+I3nErieY5GaPude/+asjtp/DEy+9ZRfo2Y8r9rcT3BYOXNg+6dLNVI0jwZto3hSbo8MI+GjI9qAWMsIapJ/Uss62yz6d3a2qpHpjfbh6mRjhSbBrKBxCqVKa5V9HYJhpnmxHq2+WdGtrwO8JTfYP0M=
