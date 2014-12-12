@@ -18,7 +18,7 @@
 
 -module(chef_ez_reindex_direct).
 
--include_lib("chef_objects/include/chef_types.hrl").
+-include_lib("oc_erchef/include/chef_types.hrl").
 -include_lib("ej/include/ej.hrl").
 
 %% A binary() index is taken to be a data bag name.
