@@ -8,3 +8,5 @@ deps.plt
 *.out
 *.o
 *.so
+.rebar
+erln8.config

@@ -8,7 +8,9 @@
                   kernel,
                   stdlib,
                   ibrowse,
-                  pooler
+                  pooler,
+                  ej,
+                  opscoderl_httpc
                  ]},
   %% uncomment if this is an active application
   {mod, { chef_reindex_app, []}},
