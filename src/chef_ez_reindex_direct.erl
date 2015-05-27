@@ -18,6 +18,10 @@
 
 -module(chef_ez_reindex_direct).
 
+-ifdef(namespaced_types).
+-type dict() :: dict:dict().
+-endif.
+
 -include_lib("oc_erchef/include/chef_types.hrl").
 -include_lib("ej/include/ej.hrl").
 
